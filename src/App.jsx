@@ -202,12 +202,13 @@ export default function App() {
               let x = cursorNote.getAbsoluteX();
               if (cursorNote instanceof VF.GhostNote) x += 10;
               cursorX = x;
-              cursorY = tabStave.getYForLine(cursor.str);
+              // cursor.str is 1-6, VexFlow lines are 0-5
+              cursorY = tabStave.getYForLine(cursor.str - 1);
               foundCursor = true;
               
               context.beginPath();
               context.setFillStyle('rgba(99, 102, 241, 0.1)'); // Indigo background
-              context.rect(x - 15, stave.getYForLine(0) - 20, 30, tabStave.getYForLine(6) - stave.getYForLine(0) + 40);
+              context.rect(x - 15, stave.getYForLine(0) - 20, 30, tabStave.getYForLine(5) - stave.getYForLine(0) + 40);
               context.fill();
             }
           }
