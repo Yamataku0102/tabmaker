@@ -54,6 +54,7 @@ export default function App() {
     { duration: 'q', notes: {}, chord: '', isRest: false }
   ]);
   const [cursor, setCursor] = useState({ col: 0, str: 1 });
+  const [lastInputCursor, setLastInputCursor] = useState(null);
   const [isInputVisible, setIsInputVisible] = useState(true);
   
   const containerRef = useRef(null);
@@ -238,13 +239,25 @@ export default function App() {
     });
   };
 
-  const handleFretInput = (fret) => {
-    updateCurrentColumn(col => ({
-      ...col,
-      isRest: false,
-      duration: currentDuration,
-      notes: { ...col.notes, [cursor.str]: fret }
-    }));
+  const handleFretInput = (digit) => {
+    updateCurrentColumn(col => {
+      const isSameCell = lastInputCursor?.col === cursor.col && lastInputCursor?.str === cursor.str;
+      const currentVal = col.notes[cursor.str];
+      let newVal = digit;
+      
+      if (isSameCell && currentVal !== undefined) {
+        const appended = parseInt(`${currentVal}${digit}`, 10);
+        newVal = appended <= 29 ? appended : digit;
+      }
+      
+      return {
+        ...col,
+        isRest: false,
+        duration: currentDuration,
+        notes: { ...col.notes, [cursor.str]: newVal }
+      };
+    });
+    setLastInputCursor({ col: cursor.col, str: cursor.str });
   };
 
   const handleRestInput = () => {
@@ -275,6 +288,7 @@ export default function App() {
   };
 
   const handleDelete = () => {
+    setLastInputCursor(null);
     setColumns(prev => {
       const next = [...prev];
       const col = { ...next[cursor.col] };
@@ -306,6 +320,7 @@ export default function App() {
   };
 
   const moveCursor = (dir) => {
+    setLastInputCursor(null);
     setCursor(prev => {
       if (dir === 'up') return { ...prev, str: Math.max(1, prev.str - 1) };
       if (dir === 'down') return { ...prev, str: Math.min(6, prev.str + 1) };
@@ -429,12 +444,12 @@ export default function App() {
             {/* Fret Pad */}
             <div className="flex flex-col gap-1 bg-gray-800 p-3 rounded-xl border border-gray-700">
               <div className="text-center text-[10px] font-bold tracking-widest text-gray-400 uppercase mb-1">Fret</div>
-              <div className="grid grid-cols-7 sm:grid-cols-13 gap-1">
-                {Array.from({length: 25}, (_, i) => i).map(f => (
+              <div className="grid grid-cols-5 gap-2">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map(f => (
                   <button
                     key={f}
                     onClick={() => handleFretInput(f)}
-                    className="w-10 h-10 rounded bg-gray-700 hover:bg-gray-600 active:bg-indigo-500 active:scale-95 font-bold text-base flex items-center justify-center transition-colors border border-gray-600"
+                    className="w-12 h-12 rounded bg-gray-700 hover:bg-gray-600 active:bg-indigo-500 active:scale-95 font-bold text-lg flex items-center justify-center transition-colors border border-gray-600 shadow-sm"
                   >
                     {f}
                   </button>
