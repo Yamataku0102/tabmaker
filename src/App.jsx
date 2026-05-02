@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as VF from 'vexflow';
-import { Settings, Plus, Trash2, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, CornerDownLeft } from 'lucide-react';
+import { Settings, Plus, Trash2, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, CornerDownLeft, ChevronUp, ChevronDown } from 'lucide-react';
 
 const stringMidi = { 1: 64, 2: 59, 3: 55, 4: 50, 5: 45, 6: 40 };
 const NOTES_SHARP = [
@@ -54,6 +54,7 @@ export default function App() {
     { duration: 'q', notes: {}, chord: '', isRest: false }
   ]);
   const [cursor, setCursor] = useState({ col: 0, str: 1 });
+  const [isInputVisible, setIsInputVisible] = useState(true);
   
   const containerRef = useRef(null);
   const wrapperRef = useRef(null);
@@ -376,8 +377,17 @@ export default function App() {
         </div>
       </div>
 
-      <div className="bg-gray-900 text-white p-4 shadow-[0_-10px_20px_rgba(0,0,0,0.2)] z-10 relative">
-        <div className="max-w-5xl mx-auto flex flex-col gap-4">
+      <div className={`bg-gray-900 text-white shadow-[0_-10px_20px_rgba(0,0,0,0.2)] z-10 relative transition-all duration-300 flex flex-col ${isInputVisible ? 'max-h-[40vh] sm:max-h-[50vh]' : 'h-0'}`}>
+        
+        <button 
+          onClick={() => setIsInputVisible(!isInputVisible)}
+          className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-6 py-2 rounded-t-xl shadow-[0_-5px_10px_rgba(0,0,0,0.1)] flex items-center justify-center gap-2 font-bold text-sm hover:bg-gray-800 transition-colors z-20"
+        >
+          {isInputVisible ? <><ChevronDown size={18} /> 閉じる</> : <><ChevronUp size={18} /> 入力パネルを開く</>}
+        </button>
+
+        <div className={`flex-1 overflow-y-auto p-3 sm:p-4 ${isInputVisible ? 'block' : 'hidden'}`}>
+          <div className="max-w-5xl mx-auto flex flex-col gap-4">
           
           <div className="flex flex-wrap justify-center gap-2">
             {durations.map(d => (
@@ -464,6 +474,7 @@ export default function App() {
               </div>
             </div>
 
+            </div>
           </div>
         </div>
       </div>
