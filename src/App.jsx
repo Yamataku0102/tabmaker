@@ -269,6 +269,15 @@ export default function App() {
     }));
   };
 
+  const handleInsertColumn = () => {
+    setLastInputCursor(null);
+    setColumns(prev => {
+      const next = [...prev];
+      next.splice(cursor.col, 0, { duration: currentDuration, notes: {}, chord: '', isRest: false });
+      return next;
+    });
+  };
+
   const handleBarlineInput = () => {
     setColumns(prev => {
       const next = [...prev];
@@ -458,31 +467,37 @@ export default function App() {
             </div>
 
             {/* Actions */}
-            <div className="flex flex-col gap-2 h-full justify-center">
+            <div className="flex flex-col gap-2 h-full justify-center w-full max-w-[280px] mx-auto sm:max-w-none sm:w-auto">
               <div className="flex gap-2">
                 <button 
-                  onClick={handleRestInput} 
-                  className="flex-1 px-3 sm:px-4 py-2 sm:py-3 rounded-lg bg-blue-600 hover:bg-blue-500 active:bg-blue-700 font-bold flex items-center justify-center gap-2 transition-all shadow-md text-sm"
+                  onClick={handleInsertColumn} 
+                  className="flex-1 px-2 py-2 rounded-lg bg-teal-600 hover:bg-teal-500 active:bg-teal-700 font-bold flex items-center justify-center gap-1 transition-all shadow-md text-xs sm:text-sm"
                 >
-                  <Plus size={18} /> 休符
+                  <Plus size={16} /> 挿入
+                </button>
+                <button 
+                  onClick={handleRestInput} 
+                  className="flex-1 px-2 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 active:bg-blue-700 font-bold flex items-center justify-center gap-1 transition-all shadow-md text-xs sm:text-sm"
+                >
+                  <Plus size={16} /> 休符
                 </button>
                 <button 
                   onClick={handleDelete} 
-                  className="flex-1 px-3 sm:px-4 py-2 sm:py-3 rounded-lg bg-red-600 hover:bg-red-500 active:bg-red-700 font-bold flex items-center justify-center gap-2 transition-all shadow-md text-sm"
+                  className="flex-1 px-2 py-2 rounded-lg bg-red-600 hover:bg-red-500 active:bg-red-700 font-bold flex items-center justify-center gap-1 transition-all shadow-md text-xs sm:text-sm"
                 >
-                  <Trash2 size={18} /> 削除
+                  <Trash2 size={16} /> 削除
                 </button>
               </div>
               <div className="flex gap-2">
                 <button 
                   onClick={handleBarlineInput} 
-                  className="flex-1 px-3 sm:px-4 py-2 sm:py-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 font-bold flex items-center justify-center gap-2 transition-all shadow-md text-sm"
+                  className="flex-1 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 font-bold flex items-center justify-center gap-2 transition-all shadow-md text-sm"
                 >
                   <span className="w-[18px] h-[18px] flex items-center justify-center font-serif text-lg">|</span> 小節線
                 </button>
                 <button 
                   onClick={handleLinebreakInput} 
-                  className="flex-1 px-3 sm:px-4 py-2 sm:py-3 rounded-lg bg-purple-600 hover:bg-purple-500 active:bg-purple-700 font-bold flex items-center justify-center gap-2 transition-all shadow-md text-sm"
+                  className="flex-1 px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 active:bg-purple-700 font-bold flex items-center justify-center gap-2 transition-all shadow-md text-sm"
                 >
                   <CornerDownLeft size={18} /> 改行
                 </button>
