@@ -56,9 +56,12 @@ export default function App() {
   const [cursor, setCursor] = useState({ col: 0, str: 1 });
   const [lastInputCursor, setLastInputCursor] = useState(null);
   const [isInputVisible, setIsInputVisible] = useState(true);
+  const [isTriplet, setIsTriplet] = useState(false);
+  const [isDotted, setIsDotted] = useState(false);
   
   const containerRef = useRef(null);
   const wrapperRef = useRef(null);
+  const hitBoxesRef = useRef([]);
   const [containerWidth, setContainerWidth] = useState(800);
 
   useEffect(() => {
@@ -105,6 +108,8 @@ export default function App() {
     const context = renderer.getContext();
     context.setFont('Arial', 10, '').setBackgroundFillStyle('#eed');
 
+    hitBoxesRef.current = [];
+
     let cursorX = 0, cursorY = 0;
     let foundCursor = false;
 
@@ -114,10 +119,15 @@ export default function App() {
       const yOffset = sysIdx * systemHeight;
       const stave = new VF.Stave(10, 80 + yOffset, containerWidth - 20);
       stave.addClef('treble').addKeySignature(currentKey);
-      stave.setContext(context).draw();
 
       const tabStave = new VF.TabStave(10, 220 + yOffset, containerWidth - 20);
       tabStave.addClef('tab');
+
+      const startX = Math.max(stave.getNoteStartX(), tabStave.getNoteStartX());
+      stave.setNoteStartX(startX);
+      tabStave.setNoteStartX(startX);
+
+      stave.setContext(context).draw();
       tabStave.setContext(context).draw();
 
       new VF.StaveConnector(stave, tabStave).setType(VF.StaveConnector.type.BRACKET).setContext(context).draw();
@@ -126,27 +136,44 @@ export default function App() {
       const staveNotes = [];
       const tabNotes = [];
       let totalBeats = 0;
-      const getBeats = (d) => ({ 'w': 4, 'h': 2, 'q': 1, '8': 0.5, '16': 0.25 }[d] || 1);
+      const getBeats = (d, isD, isT) => {
+        let b = { 'w': 4, 'h': 2, 'q': 1, '8': 0.5, '16': 0.25 }[d] || 1;
+        if (isD) b *= 1.5;
+        if (isT) b *= 2/3;
+        return b;
+      };
+      
+      let currentTupletStaveNotes = [];
+      let currentTupletTabNotes = [];
+      const tuplets = [];
+      const tabTuplets = [];
 
       sys.cols.forEach(item => {
         const { col, globalIdx } = item;
         const isCursorCol = cursor.col === globalIdx;
+        let sn = null;
+        let tn = null;
         
         if (col.type === 'barline') {
-          staveNotes.push(new VF.BarNote(VF.BarlineType.SINGLE));
-          tabNotes.push(new VF.BarNote(VF.BarlineType.SINGLE));
+          sn = new VF.BarNote(VF.BarlineType.SINGLE);
+          tn = new VF.BarNote(VF.BarlineType.SINGLE);
+          staveNotes.push(sn);
+          tabNotes.push(tn);
         } else if (col.isRest || Object.keys(col.notes || {}).length === 0) {
-          totalBeats += getBeats(col.duration);
-          const sn = new VF.StaveNote({ keys: ['b/4'], duration: col.duration + 'r' });
+          totalBeats += getBeats(col.duration, col.isDotted, col.isTriplet);
+          let durStr = col.duration + (col.isDotted ? 'd' : '') + 'r';
+          sn = new VF.StaveNote({ keys: ['b/4'], duration: durStr });
+          if (col.isDotted) sn.addModifier(new VF.Dot(), 0);
           if (col.chord) {
             sn.addModifier(new VF.Annotation(col.chord).setVerticalJustification(VF.AnnotationVerticalJustify.TOP));
           }
           staveNotes.push(sn);
 
-          const tn = new VF.GhostNote({ duration: col.duration });
+          let tDurStr = col.duration + (col.isDotted ? 'd' : '');
+          tn = new VF.GhostNote({ duration: tDurStr });
           tabNotes.push(tn);
         } else {
-          totalBeats += getBeats(col.duration);
+          totalBeats += getBeats(col.duration, col.isDotted, col.isTriplet);
           const positions = [];
           const noteEntries = Object.entries(col.notes).map(([str, fret]) => {
             const s = parseInt(str, 10);
@@ -161,7 +188,9 @@ export default function App() {
             positions.push({ str: entry.str, fret: entry.fret });
           });
 
-          const sn = new VF.StaveNote({ keys: snKeys, duration: col.duration });
+          let durStr = col.duration + (col.isDotted ? 'd' : '');
+          sn = new VF.StaveNote({ keys: snKeys, duration: durStr });
+          if (col.isDotted) sn.addModifier(new VF.Dot(), 0);
           noteEntries.forEach((entry, i) => {
             if (entry.pitch.acc) {
               sn.addModifier(new VF.Accidental(entry.pitch.acc), i);
@@ -173,14 +202,41 @@ export default function App() {
           }
           staveNotes.push(sn);
 
-          const tn = new VF.TabNote({ positions, duration: col.duration });
+          tn = new VF.TabNote({ positions, duration: durStr });
+          if (col.isDotted) tn.addModifier(new VF.Dot(), 0);
           
           if (isCursorCol) {
             // Cursor box is drawn later via context.rect
           }
           tabNotes.push(tn);
         }
+
+        // Tuplet grouping logic
+        if (col.type !== 'barline' && col.type !== 'linebreak') {
+          if (col.isTriplet) {
+            currentTupletStaveNotes.push(sn);
+            currentTupletTabNotes.push(tn);
+            if (currentTupletStaveNotes.length === 3) {
+              tuplets.push(new VF.Tuplet(currentTupletStaveNotes));
+              tabTuplets.push(new VF.Tuplet(currentTupletTabNotes));
+              currentTupletStaveNotes = [];
+              currentTupletTabNotes = [];
+            }
+          } else {
+            if (currentTupletStaveNotes.length > 0) {
+              tuplets.push(new VF.Tuplet(currentTupletStaveNotes));
+              tabTuplets.push(new VF.Tuplet(currentTupletTabNotes));
+              currentTupletStaveNotes = [];
+              currentTupletTabNotes = [];
+            }
+          }
+        }
       });
+      
+      if (currentTupletStaveNotes.length > 0) {
+        tuplets.push(new VF.Tuplet(currentTupletStaveNotes));
+        tabTuplets.push(new VF.Tuplet(currentTupletTabNotes));
+      }
 
       if (staveNotes.length > 0) {
         try {
@@ -194,8 +250,33 @@ export default function App() {
           const formatWidth = Math.max(100, containerWidth - 100);
           new VF.Formatter().joinVoices([voice, tabVoice]).format([voice, tabVoice], formatWidth);
           
+          const beams = VF.Beam.generateBeams(staveNotes.filter(n => !(n instanceof VF.BarNote)));
+          const tabBeams = VF.Beam.generateBeams(tabNotes.filter(n => !(n instanceof VF.BarNote)));
+
           voice.draw(context, stave);
           tabVoice.draw(context, tabStave);
+
+          beams.forEach(b => b.setContext(context).draw());
+          tabBeams.forEach(b => b.setContext(context).draw());
+
+          tuplets.forEach(t => t.setContext(context).draw());
+          tabTuplets.forEach(t => t.setContext(context).draw());
+
+          sys.cols.forEach((item, idx) => {
+            const n = tabNotes[idx];
+            if (n && !(n instanceof VF.BarNote)) {
+              let x = n.getAbsoluteX();
+              if (n instanceof VF.GhostNote) x += 10;
+              [1, 2, 3, 4, 5, 6].forEach(str => {
+                hitBoxesRef.current.push({
+                  col: item.globalIdx,
+                  str: str,
+                  x: x,
+                  y: tabStave.getYForLine(str - 1)
+                });
+              });
+            }
+          });
 
           const localCursorIdx = sys.cols.findIndex(c => c.globalIdx === cursor.col);
           if (localCursorIdx !== -1) {
@@ -230,6 +311,28 @@ export default function App() {
 
   }, [columns, currentKey, cursor, containerWidth]);
 
+  const handleSvgClick = (e) => {
+    if (!wrapperRef.current) return;
+    const rect = wrapperRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    let closest = null;
+    let minDist = Infinity;
+    hitBoxesRef.current.forEach(box => {
+      const dist = Math.sqrt(Math.pow(box.x - x, 2) + Math.pow(box.y - y, 2));
+      if (dist < 30 && dist < minDist) { // 30px proximity
+        minDist = dist;
+        closest = box;
+      }
+    });
+
+    if (closest) {
+      setCursor({ col: closest.col, str: closest.str });
+      setLastInputCursor(null);
+    }
+  };
+
   const updateCurrentColumn = (updater) => {
     setColumns(prev => {
       const next = [...prev];
@@ -254,6 +357,8 @@ export default function App() {
         ...col,
         isRest: false,
         duration: currentDuration,
+        isTriplet,
+        isDotted,
         notes: { ...col.notes, [cursor.str]: newVal }
       };
     });
@@ -265,6 +370,8 @@ export default function App() {
       ...col,
       isRest: true,
       duration: currentDuration,
+      isTriplet,
+      isDotted,
       notes: {}
     }));
   };
@@ -273,7 +380,7 @@ export default function App() {
     setLastInputCursor(null);
     setColumns(prev => {
       const next = [...prev];
-      next.splice(cursor.col, 0, { duration: currentDuration, notes: {}, chord: '', isRest: false });
+      next.splice(cursor.col, 0, { duration: currentDuration, isTriplet, isDotted, notes: {}, chord: '', isRest: false });
       return next;
     });
   };
@@ -396,8 +503,8 @@ export default function App() {
       </div>
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 bg-gray-200 flex items-start justify-center shadow-inner">
-        <div ref={wrapperRef} className="bg-white shadow-xl rounded-xl p-4 w-full border border-gray-200">
-          <div ref={containerRef}></div>
+        <div ref={wrapperRef} className="bg-white shadow-xl rounded-xl p-4 w-full border border-gray-200" onClick={handleSvgClick}>
+          <div ref={containerRef} className="cursor-pointer"></div>
         </div>
       </div>
 
@@ -427,6 +534,28 @@ export default function App() {
                 {d.label}
               </button>
             ))}
+            <div className="w-px h-8 bg-gray-600 mx-2 self-center"></div>
+            
+            <button
+              onClick={() => setIsTriplet(!isTriplet)}
+              className={`px-3 sm:px-4 py-2 rounded-lg font-bold text-sm transition-all duration-200 ${
+                isTriplet 
+                  ? 'bg-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.6)] transform scale-105' 
+                  : 'bg-gray-800 border border-gray-700 hover:bg-gray-700'
+              }`}
+            >
+              3連符
+            </button>
+            <button
+              onClick={() => setIsDotted(!isDotted)}
+              className={`px-3 sm:px-4 py-2 rounded-lg font-bold text-sm transition-all duration-200 ${
+                isDotted 
+                  ? 'bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.6)] transform scale-105' 
+                  : 'bg-gray-800 border border-gray-700 hover:bg-gray-700'
+              }`}
+            >
+              付点
+            </button>
           </div>
 
           <div className="flex flex-wrap gap-4 lg:gap-8 justify-center items-center">
